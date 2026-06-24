@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esai-benchmark-collection"
+version = "0.1.0"
+description = "Reproducible collection and screening of benchmark papers for ESAI trackers"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "bibtexparser>=1.4,<2",
+  "openpyxl>=3.1,<4",
+  "openreview-py>=2.2,<3",
+  "pandas>=2.2,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9", "ruff>=0.12,<1"]
+
+[project.scripts]
+esai-collect = "esai_collection.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["esai_collection*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
