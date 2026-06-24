@@ -128,6 +128,7 @@ def _record(
         if isinstance(authors_raw, list | tuple)
         else int(bool(authors_raw)),
         "publication_date": _publication_date(spec.venue, spec.year),
+        "publication_date_basis": "venue-edition-estimate",
         "year": year_from_text(venue_text, str(spec.year)),
         "venue": spec.venue,
         "venue_track": spec.track,

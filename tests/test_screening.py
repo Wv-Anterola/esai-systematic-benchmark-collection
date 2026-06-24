@@ -1,10 +1,13 @@
+import pandas as pd
 import pytest
 
 from esai_collection.screening import (
+    approved_mapping_rows,
     approved_tracker_rows,
     classify,
     deduplicate,
     review_queue,
+    screen,
 )
 
 
@@ -83,6 +86,44 @@ def test_review_queue_excludes_existing_and_low_confidence() -> None:
     ]
     queue = review_queue(rows)
     assert [row["candidate_id"] for row in queue] == ["a"]
+    assert queue[0]["suggested_quick_ref"] == "Smith2024"
+    assert queue[0]["risk_relevance_status"] == "pending"
+
+
+def test_screening_backfills_known_date_basis() -> None:
+    rows = screen([record(title="Safety Benchmark")])
+    assert rows[0]["publication_date_basis"] == "venue-edition-estimate"
+
+
+def test_tracker_matching_handles_conservative_aliases(tmp_path) -> None:
+    workbook = tmp_path / "tracker.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "title": (
+                    "Why Do Multi-Agent LLM Systems Fail? "
+                    "MAST: A Taxonomy and Benchmark"
+                )
+            },
+            {"title": "Benchmark for Safe AI"},
+        ]
+    ).to_excel(workbook, sheet_name="benchmarks", index=False)
+
+    rows = screen(
+        [
+            record(
+                source_id="alias",
+                title="Why Do Multi-Agent LLM Systems Fail?",
+                abstract="We introduce a benchmark for multi-agent failures.",
+            ),
+            record(source_id="generic", title="Benchmark"),
+        ],
+        workbook,
+    )
+    by_source = {row["source_id"]: row for row in rows}
+    assert by_source["alias"]["already_in_tracker"] == "True"
+    assert by_source["alias"]["tracker_match_method"] == ("conservative-title-alias")
+    assert by_source["generic"]["already_in_tracker"] == "False"
 
 
 def test_tracker_export_requires_coded_fields() -> None:
@@ -91,6 +132,11 @@ def test_tracker_export_requires_coded_fields() -> None:
         "review_status": "approved",
         "title": "Benchmark",
         "description": "Description",
+        "risk_relevance_status": "include",
+        "priority_risk": "yes",
+        "candidate_harm_ids": "1.01.01",
+        "triage_notes": "Measures the target behavior directly.",
+        "reviewer": "Reviewer",
     }
     with pytest.raises(ValueError, match="quick ref"):
         approved_tracker_rows([incomplete])
@@ -106,3 +152,48 @@ def test_tracker_export_requires_coded_fields() -> None:
     }
     exported = approved_tracker_rows([complete])
     assert exported[0]["quick ref"] == "Smith2024"
+    handoff = approved_mapping_rows([complete])
+    assert handoff[0]["candidate_harm_ids"] == "1.01.01"
+
+
+def test_tracker_export_requires_risk_triage() -> None:
+    row = {
+        "candidate_id": "a",
+        "review_status": "approved",
+        "title": "Benchmark",
+        "description": "Description",
+        "quick ref": "Smith2024",
+        "task": "classification",
+        "metric": "accuracy",
+        "communicated_metric": "accuracy",
+        "reviewer": "Reviewer",
+    }
+    with pytest.raises(ValueError, match="risk_relevance_status"):
+        approved_tracker_rows([row])
+
+    excluded = {
+        **row,
+        "risk_relevance_status": "exclude",
+        "triage_notes": "Does not introduce a risk-relevant scored task.",
+    }
+    assert approved_tracker_rows([excluded]) == []
+
+
+def test_tracker_export_rejects_quick_ref_collisions() -> None:
+    row = {
+        "candidate_id": "a",
+        "review_status": "approved",
+        "risk_relevance_status": "include",
+        "priority_risk": "no",
+        "candidate_harm_ids": "1.01.01",
+        "triage_notes": "Measures a taxonomy harm.",
+        "reviewer": "Reviewer",
+        "title": "Benchmark",
+        "description": "Description",
+        "quick ref": "Smith2024",
+        "task": "classification",
+        "metric": "accuracy",
+        "communicated_metric": "accuracy",
+    }
+    with pytest.raises(ValueError, match="already exist"):
+        approved_tracker_rows([row], {"smith2024"})

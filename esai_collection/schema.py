@@ -14,6 +14,7 @@ RAW_FIELDS = [
     "authors",
     "author_count",
     "publication_date",
+    "publication_date_basis",
     "year",
     "venue",
     "venue_track",
@@ -38,6 +39,7 @@ SCREENING_FIELDS = RAW_FIELDS + [
     "also_seen_at",
     "already_in_tracker",
     "tracker_match",
+    "tracker_match_method",
     "verification_status",
 ]
 
@@ -68,10 +70,27 @@ REVIEW_COLUMNS = [
     "screening_reason",
     "already_in_tracker",
     "tracker_match",
+    "tracker_match_method",
+    "suggested_quick_ref",
+    "risk_relevance_status",
+    "priority_risk",
+    "candidate_harm_ids",
+    "triage_notes",
     "review_status",
     "reviewer",
     "review_notes",
 ] + TRACKER_COLUMNS
+
+MAPPING_HANDOFF_COLUMNS = [
+    "candidate_id",
+    "quick ref",
+    "title",
+    "priority_risk",
+    "candidate_harm_ids",
+    "triage_notes",
+    "reviewer",
+    "review_notes",
+]
 
 
 @dataclass(frozen=True)

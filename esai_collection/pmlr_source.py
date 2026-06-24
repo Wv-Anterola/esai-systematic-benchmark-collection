@@ -167,6 +167,7 @@ def collect_icml(
                         "authors": "; ".join(authors),
                         "author_count": len(authors),
                         "publication_date": publication_date,
+                        "publication_date_basis": "proceedings-publication-date",
                         "year": volume.year,
                         "venue": "ICML",
                         "venue_track": "main",

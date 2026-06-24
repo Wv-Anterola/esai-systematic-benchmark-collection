@@ -47,4 +47,5 @@ def test_collect_icml_normalises_bibliography(monkeypatch) -> None:
     assert records[0]["authors"] == "Ada Smith; James Doe"
     assert records[0]["openreview_id"] == "abc123"
     assert records[0]["publication_date"] == "2023-07-23"
+    assert records[0]["publication_date_basis"] == "proceedings-publication-date"
     assert logs[0]["status"] == "ok"

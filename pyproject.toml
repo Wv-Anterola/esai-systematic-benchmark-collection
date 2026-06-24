@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "esai-benchmark-collection"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reproducible collection and screening of benchmark papers for ESAI trackers"
 readme = "README.md"
 requires-python = ">=3.11"

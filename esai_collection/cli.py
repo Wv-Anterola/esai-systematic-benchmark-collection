@@ -6,13 +6,24 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import __version__
 from .io import read_csv, write_csv
 from .openreview_source import collect_openreview
 from .pmlr_source import collect_icml
-from .schema import RAW_FIELDS, REVIEW_COLUMNS, SCREENING_FIELDS, TRACKER_COLUMNS
-from .screening import approved_tracker_rows, review_queue, screen
-from .text import utc_now
+from .provenance import write_manifest
+from .schema import (
+    MAPPING_HANDOFF_COLUMNS,
+    RAW_FIELDS,
+    REVIEW_COLUMNS,
+    SCREENING_FIELDS,
+    TRACKER_COLUMNS,
+)
+from .screening import (
+    approved_mapping_rows,
+    approved_tracker_rows,
+    review_queue,
+    screen,
+    tracker_quick_refs,
+)
 
 LOG_FIELDS = [
     "run_id",
@@ -38,11 +49,8 @@ def _year(value: str) -> int:
     return year
 
 
-def _write_manifest(path: Path, payload: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+def _sidecar(path: Path) -> Path:
+    return path.with_suffix(path.suffix + ".manifest.json")
 
 
 def collect_openreview_command(args: argparse.Namespace) -> int:
@@ -51,6 +59,19 @@ def collect_openreview_command(args: argparse.Namespace) -> int:
     )
     write_csv(args.out, records, RAW_FIELDS)
     write_csv(args.log, logs, LOG_FIELDS)
+    write_manifest(
+        _sidecar(args.out),
+        command="collect-openreview",
+        outputs=[args.out, args.log],
+        parameters={
+            "as_of_year": args.as_of_year,
+            "limit_per_venue": args.limit_per_venue,
+        },
+        counts={
+            "records": len(records),
+            "source_errors": sum(row.get("status") == "error" for row in logs),
+        },
+    )
     print(f"OpenReview records: {len(records)}")
     print(f"Run log: {args.log}")
     print(f"Raw data: {args.out}")
@@ -61,6 +82,16 @@ def collect_icml_command(args: argparse.Namespace) -> int:
     records, logs = collect_icml(as_of_year=args.as_of_year)
     write_csv(args.out, records, RAW_FIELDS)
     write_csv(args.log, logs, LOG_FIELDS)
+    write_manifest(
+        _sidecar(args.out),
+        command="collect-icml",
+        outputs=[args.out, args.log],
+        parameters={"as_of_year": args.as_of_year},
+        counts={
+            "records": len(records),
+            "source_errors": sum(row.get("status") == "error" for row in logs),
+        },
+    )
     print(f"ICML records: {len(records)}")
     print(f"Run log: {args.log}")
     print(f"Raw data: {args.out}")
@@ -84,6 +115,13 @@ def merge_command(args: argparse.Namespace) -> int:
         ),
     )
     write_csv(args.out, rows, RAW_FIELDS)
+    write_manifest(
+        _sidecar(args.out),
+        command="merge",
+        inputs=args.inputs,
+        outputs=[args.out],
+        counts={"records": len(rows)},
+    )
     print(f"Merged records: {len(rows)}")
     print(f"Raw data: {args.out}")
     return 0
@@ -95,6 +133,15 @@ def screen_command(args: argparse.Namespace) -> int:
     queue = review_queue(candidates, include_low=args.include_low)
     write_csv(args.out, candidates, SCREENING_FIELDS)
     write_csv(args.review_queue, queue, REVIEW_COLUMNS)
+    write_manifest(
+        _sidecar(args.out),
+        command="screen",
+        inputs=[args.input],
+        outputs=[args.out, args.review_queue],
+        workbook=workbook,
+        parameters={"include_low": args.include_low},
+        counts={"candidates": len(candidates), "review_queue": len(queue)},
+    )
     print(f"Screened candidates: {len(candidates)}")
     print(f"Review queue: {len(queue)}")
     print(f"Candidates: {args.out}")
@@ -103,10 +150,23 @@ def screen_command(args: argparse.Namespace) -> int:
 
 
 def export_command(args: argparse.Namespace) -> int:
-    rows = approved_tracker_rows(read_csv(args.review_queue))
-    write_csv(args.out, rows, TRACKER_COLUMNS)
-    print(f"Approved tracker rows: {len(rows)}")
+    review_rows = read_csv(args.review_queue)
+    workbook = args.workbook.resolve()
+    tracker_rows = approved_tracker_rows(review_rows, tracker_quick_refs(workbook))
+    mapping_rows = approved_mapping_rows(review_rows)
+    write_csv(args.out, tracker_rows, TRACKER_COLUMNS)
+    write_csv(args.mapping_out, mapping_rows, MAPPING_HANDOFF_COLUMNS)
+    write_manifest(
+        _sidecar(args.out),
+        command="export",
+        inputs=[args.review_queue],
+        outputs=[args.out, args.mapping_out],
+        workbook=workbook,
+        counts={"approved_tracker_rows": len(tracker_rows)},
+    )
+    print(f"Approved tracker rows: {len(tracker_rows)}")
     print(f"Tracker import: {args.out}")
+    print(f"Mapping handoff: {args.mapping_out}")
     return 0
 
 
@@ -137,28 +197,37 @@ def run_command(args: argparse.Namespace) -> int:
     write_csv(args.outdir / "collection_log.csv", logs, LOG_FIELDS)
     write_csv(args.outdir / "benchmark_candidates.csv", candidates, SCREENING_FIELDS)
     write_csv(args.outdir / "tracker_review_queue.csv", queue, REVIEW_COLUMNS)
-    manifest = {
-        "tool_version": __version__,
-        "created_at": utc_now(),
-        "as_of_year": args.as_of_year,
-        "cutoff_policy": "ICLR 2023+, ICML 2023+, NeurIPS 2022+, COLM 2024+",
-        "acl_included": False,
-        "sources": {
-            "openreview": not args.skip_openreview,
-            "pmlr_icml": not args.skip_icml,
-        },
-        "counts": {
-            "raw_records": len(merged),
-            "candidate_records": len(candidates),
-            "review_queue_records": len(queue),
-            "source_errors": sum(row.get("status") == "error" for row in logs),
-        },
-        "workbook": str(args.workbook.resolve()) if args.workbook else None,
+    output_paths = [
+        args.outdir / "papers_raw.csv",
+        args.outdir / "collection_log.csv",
+        args.outdir / "benchmark_candidates.csv",
+        args.outdir / "tracker_review_queue.csv",
+    ]
+    counts = {
+        "raw_records": len(merged),
+        "candidate_records": len(candidates),
+        "review_queue_records": len(queue),
+        "source_errors": sum(row.get("status") == "error" for row in logs),
     }
-    _write_manifest(args.outdir / "run_manifest.json", manifest)
-    print(json.dumps(manifest["counts"], indent=2))
+    write_manifest(
+        args.outdir / "run_manifest.json",
+        command="run",
+        outputs=output_paths,
+        workbook=args.workbook.resolve() if args.workbook else None,
+        parameters={
+            "as_of_year": args.as_of_year,
+            "cutoff_policy": "ICLR 2023+, ICML 2023+, NeurIPS 2022+, COLM 2024+",
+            "acl_included": False,
+            "openreview_enabled": not args.skip_openreview,
+            "pmlr_icml_enabled": not args.skip_icml,
+            "limit_per_venue": args.limit_per_venue,
+            "include_low": args.include_low,
+        },
+        counts=counts,
+    )
+    print(json.dumps(counts, indent=2))
     print(f"Outputs: {args.outdir}")
-    return int(manifest["counts"]["source_errors"] > 0)
+    return int(counts["source_errors"] > 0)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -213,8 +282,14 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument(
         "--review-queue", type=Path, default=Path("outputs/tracker_review_queue.csv")
     )
+    export.add_argument("--workbook", type=Path, required=True)
     export.add_argument(
         "--out", type=Path, default=Path("outputs/tracker_benchmarks.csv")
+    )
+    export.add_argument(
+        "--mapping-out",
+        type=Path,
+        default=Path("outputs/tracker_mapping_handoff.csv"),
     )
     export.set_defaults(handler=export_command)
 
