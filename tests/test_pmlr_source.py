@@ -5,6 +5,7 @@ ARCHIVE = """
 <ul>
   <li><a href="v202"><b>Volume 202</b></a> Proceedings of ICML 2023</li>
   <li><a href="v235"><b>Volume 235</b></a> Proceedings of ICML 2024</li>
+  <li><a href="v251"><b>Volume 251</b></a> Proceedings of GRaM at ICML 2024</li>
   <li><a href="v999"><b>Volume 999</b></a> Unrelated Conference 2025</li>
 </ul>
 """

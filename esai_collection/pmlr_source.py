@@ -69,7 +69,9 @@ def discover_icml_volumes(as_of_year: int | None = None) -> list[PmlrVolume]:
     ceiling = as_of_year or datetime.now(UTC).year
     volumes: list[PmlrVolume] = []
     for href, label in parser.items:
-        match = re.search(r"\bICML\s+(20\d{2})\b", label, re.IGNORECASE)
+        match = re.search(
+            r"\bProceedings\s+of\s+ICML\s+(20\d{2})\b", label, re.IGNORECASE
+        )
         volume_match = re.search(r"v(\d+)", href)
         if not match or not volume_match:
             continue
