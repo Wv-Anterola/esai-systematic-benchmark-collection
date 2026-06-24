@@ -1,68 +1,97 @@
-# Work package: Systematic benchmark collection
+# ESAI systematic benchmark collection
 
-Owner: Wilber + Emily. Window: 17.06.2026 - 24.06.2026.
+This repository collects benchmark papers published at major machine-learning venues from
+November 2022 onward and prepares reviewed records for the ESAI benchmark tracker.
 
-## Goal (from the project doc)
+The scope owned here is:
 
-- Collect all benchmark papers from major venues since Nov 2022.
-- Build a methodology that transfers to new venues and to future re-runs of venues
-  already covered.
-- Venues of interest: ACL venues; ICML, ICLR, NeurIPS; COLM.
+- ICLR, NeurIPS, and COLM through the OpenReview API;
+- ICML through the official Proceedings of Machine Learning Research (PMLR) volumes.
 
-## Split of work
+ACL Anthology collection is maintained separately by Emily and is intentionally not implemented
+in this repository. Its output can be merged later using the common raw schema.
 
-- Emily: ACL Anthology side (Python package + XML/YAML metadata).
-- Wilber (this folder): the OpenReview side. ICLR / NeurIPS / COLM expose accepted
-  papers through the OpenReview API. (ICML is on the doc's list but historically is
-  not on OpenReview, so it needs a separate source; flagged, not yet handled.)
+## Installation
 
-## The OpenReview pipeline (two stages)
+Python 3.11 or newer is required.
 
-Run in order. `openreview_common.py` holds the helpers the two stages share.
+```bash
+python -m pip install -e ".[dev]"
+```
 
-    pip install openreview-py
+OpenReview credentials are optional. Anonymous access works, while `OPENREVIEW_USERNAME` and
+`OPENREVIEW_PASSWORD` can improve rate limits.
 
-### 1. Collection -- `openreview_collect.py`
+## Run the pipeline
 
-Harvests every accepted paper into a raw cache, enriched but unfiltered. The slow,
-network-bound step you run once.
+The complete non-ACL workflow is one command:
 
-    python openreview_collect.py --years 2024 --limit 10     # quick smoke test
-    python openreview_collect.py                             # full maximal sweep (2019 to 2025)
-    python openreview_collect.py --venue-sets core           # lean run, skip adjacent + workshops
+```bash
+esai-collect run \
+  --workbook "path/to/ESAI Harm-Bench-Legal Map.xlsx" \
+  --outdir outputs/latest
+```
 
-Coverage is maximal by default: both OpenReview APIs (v2 for recent years, v1 for 2022
-and earlier via the Blind_Submission + decision route), ICLR + NeurIPS main + NeurIPS
-D&B, adjacent ML venues (COLM, TMLR, RLC, CoRL), and workshops discovered from the
-`venues` group (capped by `--max-workshops`). Writes `outputs/openreview_raw.csv` (all
-accepted papers, enriched: decision, primary area, arXiv id/url, code link, forum/PDF
-links, TLDR, author count, source API) and `outputs/openreview_run_log.csv`.
+The command writes:
 
-### 2. Validation (paper QC) -- `openreview_validate.py`
+| File | Purpose |
+|---|---|
+| `papers_raw.csv` | Every accepted paper returned by the supported venue sources. |
+| `collection_log.csv` | One row per source query, distinguishing success, empty results, and errors. |
+| `benchmark_candidates.csv` | Deduplicated benchmark candidates with screening evidence and tracker matches. |
+| `tracker_review_queue.csv` | High- and medium-confidence candidates prepared for manual coding. |
+| `run_manifest.json` | Scope, tool version, input workbook, record counts, and source-error count. |
 
-Turns the raw cache into a curated, deduplicated candidate list. Offline and fast, so it
-can be re-run as the keywords are tuned without going back to the API.
+Low-confidence candidates remain in `benchmark_candidates.csv`; add `--include-low` to place
+them in the manual review queue.
 
-    python openreview_validate.py                            # offline QC + workbook cross-check
-    python openreview_validate.py --check-links              # also verify forum/PDF urls resolve
+Source-specific and staged commands are also available:
 
-Keeps every D&B-track paper and keyword-filters the rest, dedups across venues (id, then
-title, then arXiv id; keeps the best venue, lists the rest in `also_seen_at`), scores
-`benchmark_confidence`, checks completeness, cross-checks titles against the local ESAI
-`.xlsx` benchmarks (skips if none found), and with `--check-links` verifies links resolve.
-Each row gets a `verification_status`. Writes `outputs/openreview_candidates.csv`.
+```bash
+esai-collect collect-openreview
+esai-collect collect-icml
+esai-collect merge outputs/openreview_raw.csv outputs/icml_raw.csv
+esai-collect screen --workbook "path/to/workbook.xlsx"
+```
 
-Note: this is paper QC (is the collected paper a real, unique benchmark), which is part of
-collection. It is NOT the project's separate "Mapping validation" work package, which
-validates benchmark-to-harm edge assignments (see `../mapping-validation/`).
+Use `esai-collect <command> --help` for all options.
 
-Output stays a discovery dump for triage: `task`, `metric`, and `evidence_type` are coded
-by hand. Auth is optional; set `OPENREVIEW_USERNAME` / `OPENREVIEW_PASSWORD` for higher
-rate limits. Both stages read OpenReview (and the local workbook, for the cross-check)
-only; they never modify the workbook. `outputs/` is gitignored.
+## Tracker integration
 
-## Open / next
+Reviewers work in `tracker_review_queue.csv`. Set `review_status` to `approved` only after coding
+the benchmark's quick reference, task, metric, and communicated metric. Then run:
 
-- Merge with Emily's ACL Anthology set (cross-source dedup) for the shared CSV.
-- ICML source (not on OpenReview): decide on PMLR / proceedings scrape.
-- Confirm the priority risks (open question flagged in the doc) to focus triage.
+```bash
+esai-collect export \
+  --review-queue outputs/tracker_review_queue.csv \
+  --out outputs/tracker_benchmarks.csv
+```
+
+`tracker_benchmarks.csv` has exactly the 13 columns used by the workbook's `benchmarks` sheet.
+Approved rows with incomplete required coding are rejected instead of silently producing a
+partial import. Benchmark IDs remain under tracker-owner control.
+
+## Method
+
+Collection and candidate screening are deliberately separate:
+
+1. Collect all accepted papers from in-scope venue editions.
+2. Preserve source identifiers, links, dates, venue tracks, and run provenance.
+3. Classify likely benchmark papers using explicit, reviewable rules.
+4. Deduplicate transitively by normalized title, OpenReview ID, and DOI.
+5. Match exact normalized titles against the current tracker workbook.
+6. Export only human-approved and fully coded records to tracker schema.
+
+See [METHODOLOGY.md](METHODOLOGY.md) for the inclusion policy, screening tiers, reproducibility
+requirements, and the procedure for adding another venue.
+
+## Development
+
+```bash
+ruff format --check esai_collection tests
+ruff check esai_collection tests
+pytest
+```
+
+Generated data and downloaded workbooks are ignored by Git.
+
