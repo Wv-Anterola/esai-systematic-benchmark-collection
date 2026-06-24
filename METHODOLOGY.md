@@ -2,100 +2,95 @@
 
 ## Scope and inclusion rule
 
-The project cutoff is 1 November 2022. Venue editions are included as follows:
+The cutoff is 1 November 2022. Whole venue editions are included as follows:
 
 | Venue | Editions | Accepted-paper source |
 |---|---|---|
-| NeurIPS | 2022 onward | OpenReview conference and Datasets & Benchmarks tracks |
+| NeurIPS | 2022 onward | OpenReview main and Datasets & Benchmarks tracks |
 | ICLR | 2023 onward | OpenReview conference venue |
 | ICML | 2023 onward | PMLR ICML proceedings volumes |
 | COLM | 2024 onward | OpenReview conference venue |
 
-This edition policy avoids treating the pre-cutoff ICLR and ICML 2022 proceedings as in scope.
-NeurIPS 2022 is included because the conference edition falls after the cutoff.
+This avoids treating the pre-cutoff ICLR and ICML 2022 proceedings as in scope. NeurIPS 2022 is
+included because the conference edition occurred after the cutoff. ACL collection is maintained
+separately and joins through the raw schema contract.
 
-ACL venues are outside this repository's ownership. A future cross-source merge should transform
-the ACL output into `RAW_FIELDS` from `esai_collection/schema.py` and pass it through the same
-screening command.
+## Source and date provenance
 
-## Source choice
+OpenReview venue identifiers provide accepted ICLR, NeurIPS, and COLM papers. Both API versions
+are attempted because older editions are not uniformly exposed through the newer API. Each
+identifier attempt is logged separately, and network failures are distinct from successful empty
+results.
 
-OpenReview venue identifiers represent accepted ICLR, NeurIPS, and COLM papers. Both API versions
-are attempted because older conferences are not consistently exposed through the newer API.
-Each attempt is logged separately. Network errors are not reported as empty venues.
-
-PMLR is the accepted-proceedings source for ICML. The collector discovers ICML volumes from the
-PMLR archive, downloads the volume bibliography maintained by PMLR, and retains its abstract,
-authors, publication date, OpenReview cross-reference, and software link when present.
+OpenReview does not provide a consistent paper-level publication date for every edition. Its
+`publication_date` is therefore a documented venue-month estimate and
+`publication_date_basis=venue-edition-estimate`. PMLR records use the proceedings publication
+date with `publication_date_basis=proceedings-publication-date`. Edition inclusion, not the
+estimated first day of a month, determines cutoff eligibility.
 
 ## Collection completeness
 
-The raw layer contains every accepted paper returned by each successful in-scope source query.
-Filtering never changes the raw layer. This makes it possible to revise the screening rules
-without repeating network collection.
+The raw layer contains every accepted paper returned by every successful in-scope query. Screening
+never modifies the raw layer, so rules can be revised without repeating network collection.
 
-The collection log is part of the evidence. A run is not complete while an in-scope source query
-has `status=error`. `status=empty` is reserved for a successful query that returned no accepted
-papers, such as a future conference edition before decisions are released.
+A run is incomplete while any required query has `status=error`. `status=empty` means the query
+succeeded but returned no accepted papers, which is expected for a future edition before decisions
+are released. The collection log is part of the evidence and must accompany a handoff.
 
 ## Candidate screening
 
-Screening assigns one of three tiers:
+Screening assigns:
 
-- `high`: accepted in a Datasets & Benchmarks track, or the title explicitly names a benchmark,
-  dataset, corpus, challenge, testbed, leaderboard, evaluation suite, or shared task;
-- `medium`: the abstract states that the paper introduces, presents, releases, proposes, develops,
-  builds, or creates one of those evaluation artifacts;
-- `low`: the abstract mentions such an artifact but does not claim to introduce one.
+- `high` when the paper is in a Datasets & Benchmarks track or its title explicitly names an
+  evaluation artifact;
+- `medium` when the abstract states that the paper introduces, presents, releases, proposes,
+  develops, builds, or creates an evaluation artifact;
+- `low` when the abstract mentions such an artifact without an introduction claim.
 
-All tiers are retained in `benchmark_candidates.csv`. The default tracker review queue contains
-high and medium tiers. Low-tier records can be included for a recall audit with `--include-low`.
-The tier is evidence for triage, not a final determination that the paper is a benchmark.
+All tiers remain in the candidate catalog. The default review queue contains high and medium
+tiers; low-tier rows can be added for a recall audit. A tier is triage evidence, not a final
+inclusion judgment.
 
-## Deduplication
+## Deduplication and tracker matching
 
-Candidate records are joined transitively on:
+Candidate records are joined transitively by exact normalized title, OpenReview forum ID, and DOI.
+The retained row is the highest-tier, most complete record, with missing fields filled from its
+duplicates and alternate source IDs retained in `also_seen_at`.
 
-1. exact normalized title;
-2. OpenReview forum ID;
-3. DOI.
+Tracker matching first uses exact normalized titles. It then accepts a conservative alias only
+when one unique tracker title either contains the other as a multi-token phrase or has token
+Jaccard similarity of at least 0.90. A distinctive single-token containment must be at least eight
+characters and cannot be a generic term such as `benchmark` or `dataset`. Multiple alias matches
+are marked ambiguous and remain in the review queue. The match method is always recorded.
 
-Transitive joining matters when one source shares a title with a second source and the second
-shares an identifier with a third. The retained record is the highest-confidence and most
-complete member of the group. Missing metadata is filled from other members, and all alternate
-source records are preserved in `also_seen_at`.
+## Risk relevance and export
 
-## Tracker matching and export
+A candidate is not tracker-ready merely because it introduces a benchmark. A reviewer must state
+whether its scored task and metric are relevant to at least one risk, identify candidate harm IDs,
+record whether those harms are in the project's priority set, and explain the triage decision.
+The project owner must provide the current priority-risk list; the collector does not infer it.
 
-When a workbook is supplied, candidate titles are matched exactly after case and punctuation
-normalization against the `benchmarks` sheet. Existing titles are excluded from the default review
-queue and remain visible in the candidate file.
-
-The review queue carries the tracker fields alongside provenance and review fields. Export accepts
-only rows marked `approved` and requires title, description, quick reference, task, metric, and
-communicated metric. The resulting file uses the workbook's exact `benchmarks` column order.
+Exported benchmark rows retain the workbook's exact column order. A separate mapping handoff
+preserves candidate ID, quick reference, title, priority status, harm IDs, triage rationale, and
+review attribution until the tracker owner assigns a benchmark ID.
 
 ## Reproducibility
 
-Every full run records:
-
-- UTC collection time and stable run IDs;
-- queried venue, year, track, source identifier, API version, status, count, and error;
-- package version and scope in `run_manifest.json`;
-- the workbook path used for tracker matching;
-- raw, screened, and review-queue record counts.
-
-Generated outputs are not committed. A release or handoff should publish the manifest and the
-reviewed tracker file together.
+Every command records the package version, UTC time, Git commit and dirty state, parameters, input
+hashes, workbook hash where applicable, output hashes, and counts. Full collection additionally
+records source enablement, cutoff policy, record counts, and source error count. Generated data is
+not committed; publish the manifest, collection log, reviewed queue, tracker import, and mapping
+handoff together.
 
 ## Adding another venue
 
-A new source adapter must:
+A new adapter must:
 
 1. use an authoritative accepted-paper list;
-2. emit every field in `RAW_FIELDS` without changing field meaning;
-3. produce query-level log rows with separate `ok`, `empty`, and `error` states;
-4. include fixture-based tests for parsing and date boundaries;
-5. document the venue's first in-scope edition;
-6. pass its records through the shared screening, deduplication, tracker matching, and export code.
-
+2. emit every field in `RAW_FIELDS` with unchanged meaning;
+3. state the exact or estimated basis for `publication_date`;
+4. log each query with separate `ok`, `empty`, and `error` states;
+5. include fixture-based parser and date-boundary tests;
+6. document the first in-scope edition;
+7. pass records through the shared screening, deduplication, matching, risk-triage, and export
+   workflow.
