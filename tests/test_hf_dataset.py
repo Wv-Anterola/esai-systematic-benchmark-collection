@@ -37,6 +37,27 @@ def test_export_hf_dataset_writes_separate_jsonl_files(tmp_path) -> None:
             }
         ],
         source_registry=[{"benchmark_id": "bench-1", "quick_ref": "Lovelace2025"}],
+        mapping_predictions=[
+            {
+                "edge_id": "edge-1",
+                "model": "deterministic-heuristics-v1",
+                "verdict": "DOWN-RATE",
+                "corrected_strength": "weak-proxy",
+                "corrected_basis": "face-validity-only",
+                "needs_human_review": True,
+            }
+        ],
+        mapping_review=[
+            {
+                "edge_id": "edge-1",
+                "benchmark_id": "bench-1",
+                "harm_id": "harm-1",
+                "model": "deterministic-heuristics-v1",
+                "verdict": "DOWN-RATE",
+                "proposed_strength": "weak-proxy",
+                "proposed_basis": "face-validity-only",
+            }
+        ],
     )
 
     assert counts == {
@@ -45,6 +66,8 @@ def test_export_hf_dataset_writes_separate_jsonl_files(tmp_path) -> None:
         "collection_review_queue": 1,
         "benchmark_harm_edges": 1,
         "benchmark_sources": 1,
+        "mapping_predictions": 1,
+        "mapping_review": 1,
     }
     assert tmp_path.joinpath("schema.json").exists()
     assert tmp_path.joinpath("README.md").exists()
@@ -52,6 +75,8 @@ def test_export_hf_dataset_writes_separate_jsonl_files(tmp_path) -> None:
         "papers.jsonl",
         "benchmark_candidates.jsonl",
         "benchmark_harm_edges.jsonl",
+        "mapping_predictions.jsonl",
+        "mapping_review.jsonl",
     }
 
     paper = json.loads(tmp_path.joinpath("papers.jsonl").read_text().splitlines()[0])
@@ -63,3 +88,9 @@ def test_export_hf_dataset_writes_separate_jsonl_files(tmp_path) -> None:
     )
     assert edge["record_type"] == "benchmark_harm_edge"
     assert edge["strength"] == "strong-proxy"
+
+    prediction = json.loads(
+        tmp_path.joinpath("mapping_predictions.jsonl").read_text().splitlines()[0]
+    )
+    assert prediction["validator_type"] == "deterministic"
+    assert prediction["needs_human_review"] is True

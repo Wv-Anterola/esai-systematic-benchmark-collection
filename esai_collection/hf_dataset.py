@@ -137,6 +137,60 @@ SOURCE_REGISTRY_FIELDS = [
     "notes",
 ]
 
+MAPPING_PREDICTION_FIELDS = [
+    "schema_version",
+    "record_type",
+    "edge_id",
+    "validator_type",
+    "validator_name",
+    "prompt_name",
+    "prompt_sha256",
+    "model",
+    "created_at",
+    "verdict",
+    "corrected_strength",
+    "corrected_basis",
+    "scored_construct",
+    "evidence_used",
+    "inference_steps",
+    "reason",
+    "confidence",
+    "needs_human_review",
+    "parse_error",
+    "raw_response",
+]
+
+MAPPING_REVIEW_FIELDS = [
+    "schema_version",
+    "record_type",
+    "edge_id",
+    "benchmark_id",
+    "harm_id",
+    "benchmark_title",
+    "benchmark_task",
+    "benchmark_metric",
+    "benchmark_evidence_type",
+    "context_status",
+    "harm_label",
+    "harm_domain",
+    "current_strength",
+    "current_basis",
+    "current_confidence",
+    "verdict",
+    "proposed_strength",
+    "proposed_basis",
+    "scored_construct",
+    "evidence_used",
+    "inference_steps",
+    "confidence",
+    "reason",
+    "needs_human_review",
+    "validator_name",
+    "review_status",
+    "reviewer",
+    "review_notes",
+]
+
 
 def _text(value: object) -> str:
     return str(value or "").strip()
@@ -157,6 +211,8 @@ def _semicolon_list(value: object) -> list[str]:
 
 
 def _bool_or_none(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
     text = _text(value).casefold()
     if text in {"true", "yes", "1"}:
         return True
@@ -317,6 +373,77 @@ def source_registry_record(
     }
 
 
+def mapping_prediction_record(
+    row: Mapping[str, object], *, schema_version: str = SCHEMA_VERSION
+) -> dict[str, object]:
+    validator_name = _pick(row, "model") or _pick(row, "prompt_name")
+    validator_type = (
+        "deterministic"
+        if validator_name.startswith("deterministic-")
+        else "model"
+        if validator_name
+        else ""
+    )
+    return {
+        "schema_version": schema_version,
+        "record_type": "mapping_prediction",
+        "edge_id": _pick(row, "edge_id"),
+        "validator_type": validator_type,
+        "validator_name": validator_name,
+        "prompt_name": _pick(row, "prompt_name"),
+        "prompt_sha256": _pick(row, "prompt_sha256"),
+        "model": _pick(row, "model"),
+        "created_at": _pick(row, "created_at"),
+        "verdict": _pick(row, "verdict"),
+        "corrected_strength": _pick(row, "corrected_strength"),
+        "corrected_basis": _pick(row, "corrected_basis"),
+        "scored_construct": _pick(row, "scored_construct"),
+        "evidence_used": _pick(row, "evidence_used"),
+        "inference_steps": _integer(row.get("inference_steps", "")),
+        "reason": _pick(row, "reason"),
+        "confidence": _pick(row, "confidence"),
+        "needs_human_review": _bool_or_none(row.get("needs_human_review", "")),
+        "parse_error": _pick(row, "parse_error"),
+        "raw_response": _pick(row, "raw_response"),
+    }
+
+
+def mapping_review_record(
+    row: Mapping[str, object], *, schema_version: str = SCHEMA_VERSION
+) -> dict[str, object]:
+    validator_name = _pick(row, "model") or _pick(row, "prompt_name")
+    return {
+        "schema_version": schema_version,
+        "record_type": "mapping_review_row",
+        "edge_id": _pick(row, "edge_id"),
+        "benchmark_id": _pick(row, "benchmark_id"),
+        "harm_id": _pick(row, "harm_id"),
+        "benchmark_title": _pick(row, "benchmark_title"),
+        "benchmark_task": _pick(row, "benchmark_task"),
+        "benchmark_metric": _pick(row, "benchmark_metric"),
+        "benchmark_evidence_type": _pick(row, "benchmark_evidence_type"),
+        "context_status": _pick(row, "context_status"),
+        "harm_label": _pick(row, "harm_label"),
+        "harm_domain": _pick(row, "harm_domain"),
+        "current_strength": _pick(row, "current_strength"),
+        "current_basis": _pick(row, "current_basis"),
+        "current_confidence": _pick(row, "current_confidence"),
+        "verdict": _pick(row, "verdict"),
+        "proposed_strength": _pick(row, "proposed_strength"),
+        "proposed_basis": _pick(row, "proposed_basis"),
+        "scored_construct": _pick(row, "scored_construct"),
+        "evidence_used": _pick(row, "evidence_used"),
+        "inference_steps": _integer(row.get("inference_steps", "")),
+        "confidence": _pick(row, "model_confidence"),
+        "reason": _pick(row, "reason"),
+        "needs_human_review": _bool_or_none(row.get("needs_human_review", "")),
+        "validator_name": validator_name,
+        "review_status": _pick(row, "review_status"),
+        "reviewer": _pick(row, "reviewer"),
+        "review_notes": _pick(row, "review_notes"),
+    }
+
+
 def _write_schema(outdir: Path, *, schema_version: str) -> Path:
     schema = {
         "schema_version": schema_version,
@@ -347,6 +474,16 @@ def _write_schema(outdir: Path, *, schema_version: str) -> Path:
                 "primary_key": "benchmark_id",
                 "fields": SOURCE_REGISTRY_FIELDS,
             },
+            "mapping_predictions.jsonl": {
+                "record_type": "mapping_prediction",
+                "primary_key": "edge_id + validator_name",
+                "fields": MAPPING_PREDICTION_FIELDS,
+            },
+            "mapping_review.jsonl": {
+                "record_type": "mapping_review_row",
+                "primary_key": "edge_id + validator_name",
+                "fields": MAPPING_REVIEW_FIELDS,
+            },
         },
     }
     path = outdir / "schema.json"
@@ -363,20 +500,44 @@ def _write_card(
     review_count = counts.get("collection_review_queue", 0)
     edge_count = counts.get("benchmark_harm_edges", 0)
     source_count = counts.get("benchmark_sources", 0)
+    prediction_count = counts.get("mapping_predictions", 0)
+    mapping_review_count = counts.get("mapping_review", 0)
     body = f"""---
-dataset_info:
-  features: []
+license: other
+language:
+  - en
+task_categories:
+  - text-classification
+  - tabular-classification
 configs:
   - config_name: papers
-    data_files: papers.jsonl
+    data_files:
+      - split: train
+        path: papers.jsonl
   - config_name: benchmark_candidates
-    data_files: benchmark_candidates.jsonl
+    data_files:
+      - split: train
+        path: benchmark_candidates.jsonl
   - config_name: collection_review_queue
-    data_files: collection_review_queue.jsonl
+    data_files:
+      - split: train
+        path: collection_review_queue.jsonl
   - config_name: benchmark_harm_edges
-    data_files: benchmark_harm_edges.jsonl
+    data_files:
+      - split: train
+        path: benchmark_harm_edges.jsonl
   - config_name: benchmark_sources
-    data_files: benchmark_sources.jsonl
+    data_files:
+      - split: train
+        path: benchmark_sources.jsonl
+  - config_name: mapping_predictions
+    data_files:
+      - split: train
+        path: mapping_predictions.jsonl
+  - config_name: mapping_review
+    data_files:
+      - split: train
+        path: mapping_review.jsonl
 ---
 
 # {dataset_name}
@@ -397,8 +558,17 @@ source verification.
 | `collection_review_queue.jsonl` | {review_count} | `candidate_id` |
 | `benchmark_harm_edges.jsonl` | {edge_count} | `edge_id` |
 | `benchmark_sources.jsonl` | {source_count} | `benchmark_id` |
+| `mapping_predictions.jsonl` | {prediction_count} | `edge_id + validator_name` |
+| `mapping_review.jsonl` | {mapping_review_count} | `edge_id + validator_name` |
 
 See `schema.json` for field lists and primary keys.
+
+## Use Notes
+
+This export is intended for research and data-engineering review. The mapping
+prediction and review files contain deterministic validator output and should
+not be interpreted as final tracker decisions. Human approval is still required
+before applying any mapping patch.
 """
     path.write_text(body, "utf-8")
     return path
@@ -413,6 +583,8 @@ def export_hf_dataset(
     review_queue: Iterable[Mapping[str, object]] = (),
     mapping_edges: Iterable[Mapping[str, object]] = (),
     source_registry: Iterable[Mapping[str, object]] = (),
+    mapping_predictions: Iterable[Mapping[str, object]] = (),
+    mapping_review: Iterable[Mapping[str, object]] = (),
     schema_version: str = SCHEMA_VERSION,
 ) -> tuple[list[Path], dict[str, int]]:
     outdir.mkdir(parents=True, exist_ok=True)
@@ -431,16 +603,34 @@ def export_hf_dataset(
         source_registry_record(row, schema_version=schema_version)
         for row in source_registry
     ]
+    prediction_rows = [
+        mapping_prediction_record(row, schema_version=schema_version)
+        for row in mapping_predictions
+    ]
+    mapping_review_rows = [
+        mapping_review_record(row, schema_version=schema_version)
+        for row in mapping_review
+    ]
     files = [
         outdir / "papers.jsonl",
         outdir / "benchmark_candidates.jsonl",
         outdir / "collection_review_queue.jsonl",
         outdir / "benchmark_harm_edges.jsonl",
         outdir / "benchmark_sources.jsonl",
+        outdir / "mapping_predictions.jsonl",
+        outdir / "mapping_review.jsonl",
     ]
     for path, rows in zip(
         files,
-        [paper_rows, candidate_rows, review_rows, edge_rows, source_rows],
+        [
+            paper_rows,
+            candidate_rows,
+            review_rows,
+            edge_rows,
+            source_rows,
+            prediction_rows,
+            mapping_review_rows,
+        ],
         strict=True,
     ):
         write_jsonl(path, rows)
@@ -450,6 +640,8 @@ def export_hf_dataset(
         "collection_review_queue": len(review_rows),
         "benchmark_harm_edges": len(edge_rows),
         "benchmark_sources": len(source_rows),
+        "mapping_predictions": len(prediction_rows),
+        "mapping_review": len(mapping_review_rows),
     }
     files.append(_write_schema(outdir, schema_version=schema_version))
     files.append(

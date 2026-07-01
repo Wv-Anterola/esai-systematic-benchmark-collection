@@ -11,6 +11,22 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def read_jsonl(path: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid JSON on {path}:{line_number}") from exc
+            if not isinstance(row, dict):
+                raise ValueError(f"expected JSON object on {path}:{line_number}")
+            rows.append(row)
+    return rows
+
+
 def write_csv(
     path: Path,
     rows: Iterable[Mapping[str, object]],

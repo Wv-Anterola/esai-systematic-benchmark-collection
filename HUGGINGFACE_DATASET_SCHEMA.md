@@ -1,86 +1,93 @@
 # HuggingFace dataset schema
 
-This package can export the collection and mapping work as a HuggingFace-ready JSONL directory:
+The published dataset (`wvanterola/esai_benchmark_map`) uses the **v1.0.0**
+format. It maps AI-safety **benchmarks** to a **harm taxonomy** and keeps the
+collection and mapping-review provenance alongside.
 
-```bash
-esai-collect export-hf-dataset \
-  --papers outputs/latest/papers_raw.csv \
-  --candidates outputs/latest/benchmark_candidates.csv \
-  --review-queue outputs/latest/tracker_review_queue.csv \
-  --mapping-edges ../mapping-validation/outputs/hardened/all_edges.csv \
-  --source-registry ../mapping-validation/outputs/hardened/benchmark_sources.csv \
-  --outdir outputs/hf_dataset
+The format follows the design discipline of EvalEval's *Every Eval Ever* schema
+without copying its result-oriented fields (this dataset stores a
+benchmark-to-harm map, not model scores):
+
+- **stable UUID identity** (deterministic UUIDv5 from a fixed namespace);
+- **normalized entities** (`paper`, `benchmark`, `harm`) separated from the
+  **relationships** and **annotations** that connect them;
+- **layered provenance** as a nested `provenance` object on entities;
+- **closed controlled vocabularies** for grading and status fields;
+- a **checksummed manifest** (`dataset_manifest.json`) that declares per-file
+  `sha256`, row counts, primary keys, and cross-file references.
+
+The canonical, generated specification ships inside the dataset as `SCHEMA.md`,
+with machine-readable JSON Schema under `schema/`. `esai_collection/dataset_v1.py`
+is the single source of truth: it generates both the JSON Schema and the record
+transforms, so an emitted dataset cannot drift from its schema.
+
+## Package layout
+
 ```
-
-The format borrows two practical ideas from EvalEval's Every Eval Ever schema:
-
-- version every record and keep stable IDs;
-- separate aggregate/provenance records from more detailed downstream records.
-
-This project is not storing model-evaluation scores, so it uses flat JSONL tables rather than
-EvalEval's run-level and instance-level score files.
+README.md               dataset card (HF configs -> data/*.jsonl)
+SCHEMA.md               generated specification (fields, enums, references)
+dataset_manifest.json   checksums, counts, primary keys, references
+data/*.jsonl            one config per file
+schema/*.schema.json    JSON Schema per record type
+```
 
 ## Files
 
-| File | Unit | Primary key | Purpose |
+| File | Record type | Primary key | Kind |
 |---|---|---|---|
-| `papers.jsonl` | accepted paper | `paper_id` | Authoritative paper provenance from OpenReview, PMLR, ACL handoff, or future accepted-paper sources. |
-| `benchmark_candidates.jsonl` | screened candidate | `candidate_id` | Deduplicated benchmark candidates and screening evidence. |
-| `collection_review_queue.jsonl` | review row | `candidate_id` | Human review fields for benchmark inclusion and risk triage. |
-| `benchmark_harm_edges.jsonl` | mapping edge | `edge_id` | Current benchmark-to-harm relations with source context. |
-| `benchmark_sources.jsonl` | benchmark source record | `benchmark_id` | Source-verification status for benchmarks already in the tracker. |
-| `schema.json` | schema manifest | none | Field lists, primary keys, and schema version. |
-| `README.md` | dataset card | none | HuggingFace dataset card stub with row counts. |
+| `data/papers.jsonl` | `paper` | `paper_id` | entity |
+| `data/benchmarks.jsonl` | `benchmark` | `benchmark_id` | entity |
+| `data/harms.jsonl` | `harm` | `harm_id` | entity |
+| `data/benchmark_candidates.jsonl` | `benchmark_candidate` | `candidate_id` | relationship |
+| `data/collection_review_queue.jsonl` | `collection_review_row` | `candidate_id` | annotation |
+| `data/benchmark_harm_edges.jsonl` | `benchmark_harm_edge` | `edge_id` | relationship |
+| `data/mapping_predictions.jsonl` | `mapping_prediction` | `edge_id` + assessor | annotation |
+| `data/mapping_review.jsonl` | `mapping_review_row` | `edge_id` + assessor | annotation |
 
-## Record rules
+## Build and validate
 
-- Every row has `schema_version` and `record_type`.
-- Empty unknown values are empty strings in CSV inputs and become empty strings or `null` in JSONL
-  where a numeric or boolean value is expected.
-- Semicolon-separated CSV fields such as `authors`, `keywords`, `candidate_harm_ids`, and
-  `also_seen_at` become JSON arrays.
-- `paper_id`, `candidate_id`, `edge_id`, and `benchmark_id` are stable identifiers, not row
-  numbers.
-- ACL Anthology output should enter through the shared raw schema first, then the exported dataset
-  should be regenerated from the merged candidate catalog.
+Build a v1.0.0 package from a v0.1.0 export:
 
-## Minimal record examples
-
-```json
-{
-  "schema_version": "0.1.0",
-  "record_type": "paper",
-  "paper_id": "openreview:abc123",
-  "source": "openreview",
-  "source_id": "abc123",
-  "title": "Example Safety Benchmark",
-  "authors": ["First Author", "Second Author"],
-  "year": 2025,
-  "venue": "ICLR",
-  "paper_url": "https://openreview.net/forum?id=abc123"
-}
+```bash
+python scripts/build_dataset_v1.py \
+  --in  outputs/hf_upload_esai_benchmark_map_2026_07_01_final \
+  --out outputs/hf_upload_esai_benchmark_map_v1 \
+  --dataset-name esai_benchmark_map
 ```
 
-```json
-{
-  "schema_version": "0.1.0",
-  "record_type": "benchmark_harm_edge",
-  "edge_id": "edge-001",
-  "benchmark_id": "bench-001",
-  "harm_id": "harm-001",
-  "strength": "strong-proxy",
-  "basis": "face-validity-only",
-  "confidence": "possible"
-}
+Validate a package (checksums, JSON Schema, primary keys, referential integrity):
+
+```bash
+python scripts/validate_dataset_v1.py --dir outputs/hf_upload_esai_benchmark_map_v1
 ```
 
-## Loading locally
+`validate_dataset_v1.py` requires `jsonschema`; without it the structural and
+referential checks still run and schema validation is skipped with a warning.
 
-Each file can be loaded as a separate HuggingFace config:
+## Publishing
 
-```python
-from datasets import load_dataset
-
-papers = load_dataset("json", data_files="papers.jsonl", split="train")
-edges = load_dataset("json", data_files="benchmark_harm_edges.jsonl", split="train")
+```bash
+hf upload wvanterola/esai_benchmark_map \
+  outputs/hf_upload_esai_benchmark_map_v1 . --repo-type=dataset
 ```
+
+`mapping_predictions` and `mapping_review` are validator and human-review aids,
+not final tracker decisions. Human approval is required before applying any
+mapping change.
+
+## Migrating from v0.1.0
+
+v0.1.0 was a set of flat JSONL tables that denormalized benchmark and harm
+metadata onto every edge and review row. v1.0.0 is a breaking change:
+
+- `benchmark_sources.jsonl` becomes the `benchmark` entity, enriched with the
+  benchmark metadata that previously lived only on edges;
+- a new `harms.jsonl` entity is normalized out of the edge harm fields;
+- edges and review rows reference entities by `*_uuid` instead of repeating
+  their descriptive fields;
+- `mapping_predictions` / `mapping_review` fold validator identity into a nested
+  `assessor` object;
+- files move under `data/`, and `schema.json` is replaced by
+  `dataset_manifest.json` + `schema/`.
+
+Regenerate with `build_dataset_v1.py`; there is no in-place upgrade.

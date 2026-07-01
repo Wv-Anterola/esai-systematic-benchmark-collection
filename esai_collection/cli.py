@@ -10,7 +10,7 @@ from .enrichment import ENRICHMENT_FIELDS, enrich_records
 from .hf_dataset import SCHEMA_VERSION, export_hf_dataset
 from .hf_discovery import HF_DISCOVERY_FIELDS, discover_hf_datasets
 from .http import JsonHttpClient
-from .io import read_csv, write_csv
+from .io import read_csv, read_jsonl, write_csv
 from .openreview_source import collect_openreview
 from .pmlr_source import collect_icml
 from .provenance import write_manifest
@@ -358,6 +358,10 @@ def _read_existing_csv(path: Path | None) -> list[dict[str, str]]:
     return read_csv(path) if path and path.exists() else []
 
 
+def _read_existing_jsonl(path: Path | None) -> list[dict[str, object]]:
+    return read_jsonl(path) if path and path.exists() else []
+
+
 def export_hf_dataset_command(args: argparse.Namespace) -> int:
     outputs, counts = export_hf_dataset(
         outdir=args.outdir,
@@ -367,6 +371,8 @@ def export_hf_dataset_command(args: argparse.Namespace) -> int:
         review_queue=_read_existing_csv(args.review_queue),
         mapping_edges=_read_existing_csv(args.mapping_edges),
         source_registry=_read_existing_csv(args.source_registry),
+        mapping_predictions=_read_existing_jsonl(args.mapping_predictions),
+        mapping_review=_read_existing_csv(args.mapping_review),
         schema_version=args.schema_version,
     )
     inputs = [
@@ -377,6 +383,8 @@ def export_hf_dataset_command(args: argparse.Namespace) -> int:
             args.review_queue,
             args.mapping_edges,
             args.source_registry,
+            args.mapping_predictions,
+            args.mapping_review,
         )
         if path and path.exists()
     ]
@@ -621,6 +629,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("../mapping-validation/outputs/hardened/benchmark_sources.csv"),
     )
+    dataset.add_argument(
+        "--mapping-predictions",
+        type=Path,
+        default=Path(
+            "../mapping-validation/outputs/hardened/heuristic_predictions.jsonl"
+        ),
+    )
+    dataset.add_argument("--mapping-review", type=Path)
     dataset.add_argument("--outdir", type=Path, default=Path("outputs/hf_dataset"))
     dataset.add_argument("--dataset-name", default="esai-benchmark-map")
     dataset.add_argument("--schema-version", default=SCHEMA_VERSION)

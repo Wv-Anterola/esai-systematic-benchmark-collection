@@ -87,6 +87,8 @@ esai-collect export-hf-dataset \
   --review-queue outputs/combined/tracker_review_queue.csv \
   --mapping-edges ../mapping-validation/outputs/hardened/all_edges.csv \
   --source-registry ../mapping-validation/outputs/hardened/benchmark_sources.csv \
+  --mapping-predictions ../mapping-validation/outputs/hardened/heuristic_predictions.jsonl \
+  --mapping-review ../mapping-validation/outputs/hardened/heuristic_mapping_review.csv \
   --outdir outputs/hf_dataset
 ```
 
