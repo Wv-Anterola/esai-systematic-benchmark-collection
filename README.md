@@ -7,11 +7,12 @@ metadata enrichment so the provenance of accepted papers stays clear.
 The scope owned here is:
 
 - ICLR, NeurIPS, and COLM through OpenReview;
-- ICML through the official Proceedings of Machine Learning Research volumes.
+- ICML through the official Proceedings of Machine Learning Research volumes;
+- the major ACL Anthology venue families through the Anthology's own XML/venue metadata.
 
-ACL Anthology collection belongs to Emily's workstream. [SCHEMA.md](SCHEMA.md) defines the raw-data
-contract for merging her output, and [SOURCE_ADAPTERS.md](SOURCE_ADAPTERS.md) explains how to add
-ACL and future sources without changing the screening/review/export pipeline.
+All sources emit the same raw schema and flow through one screening/review/export pipeline.
+[SCHEMA.md](SCHEMA.md) defines the raw-data contract and [SOURCE_ADAPTERS.md](SOURCE_ADAPTERS.md)
+explains how to add future sources without changing the pipeline.
 
 ## Installation
 
@@ -50,13 +51,20 @@ Source-specific and staged commands are also available:
 ```bash
 esai-collect collect-openreview
 esai-collect collect-icml
-esai-collect merge outputs/openreview_raw.csv outputs/icml_raw.csv path/to/emily_acl_raw.csv
+esai-collect collect-acl
+esai-collect merge outputs/openreview_raw.csv outputs/icml_raw.csv outputs/acl_raw.csv
 esai-collect screen \
   --input outputs/papers_raw.csv \
   --workbook "path/to/workbook.xlsx"
 ```
 
 Every staged command writes a hash manifest beside its primary output.
+
+`collect-acl` parses a local ACL Anthology `data/` checkout. Install `acl-anthology-py` and fetch
+the corpus once (`python -c "from acl_anthology import Anthology; Anthology.from_repo()"`), or point
+`--data-dir` / the `ACL_ANTHOLOGY_DATA` environment variable at any checkout of
+`acl-org/acl-anthology/data`. The full `run` pipeline includes ACL by default; add `--skip-acl` to
+omit it (for example when the Anthology data is not available).
 
 ## Optional sidecars
 
