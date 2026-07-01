@@ -4,5 +4,6 @@ __pycache__/
 *.xlsx
 *.xls
 .pytest_cache/
+test-tmp/
 *.egg-info/
 .venv/

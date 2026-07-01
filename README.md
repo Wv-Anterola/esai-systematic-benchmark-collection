@@ -1,16 +1,17 @@
 # ESAI systematic benchmark collection
 
-This repository collects accepted papers from major machine-learning venues since the November
-2022 cutoff, identifies benchmark candidates, checks the existing tracker, and prepares reviewed
-tracker imports.
+This package collects accepted papers from in-scope venues, screens them for benchmark candidates,
+and prepares review files for the ESAI tracker. It keeps venue collection separate from optional
+metadata enrichment so the provenance of accepted papers stays clear.
 
 The scope owned here is:
 
 - ICLR, NeurIPS, and COLM through OpenReview;
 - ICML through the official Proceedings of Machine Learning Research volumes.
 
-ACL Anthology collection belongs to Emily's separate repository. [SCHEMA.md](SCHEMA.md) defines
-the raw-data contract for merging that output without coupling the two implementations.
+ACL Anthology collection belongs to Emily's workstream. [SCHEMA.md](SCHEMA.md) defines the raw-data
+contract for merging her output, and [SOURCE_ADAPTERS.md](SOURCE_ADAPTERS.md) explains how to add
+ACL and future sources without changing the screening/review/export pipeline.
 
 ## Installation
 
@@ -49,13 +50,42 @@ Source-specific and staged commands are also available:
 ```bash
 esai-collect collect-openreview
 esai-collect collect-icml
-esai-collect merge outputs/openreview_raw.csv outputs/icml_raw.csv
+esai-collect merge outputs/openreview_raw.csv outputs/icml_raw.csv path/to/emily_acl_raw.csv
 esai-collect screen \
   --input outputs/papers_raw.csv \
   --workbook "path/to/workbook.xlsx"
 ```
 
 Every staged command writes a hash manifest beside its primary output.
+
+## Optional sidecars
+
+These commands do not change `papers_raw.csv` or the tracker export. They create separate files
+for review and triage.
+
+```bash
+esai-collect enrich-metadata \
+  --input outputs/benchmark_candidates.csv \
+  --providers semantic-scholar,openalex \
+  --limit 500 \
+  --out outputs/metadata_enrichment.csv
+
+esai-collect discover-hf-datasets \
+  --candidates outputs/benchmark_candidates.csv \
+  --queries "safety benchmark,red teaming,llm benchmark" \
+  --max-candidate-queries 100 \
+  --out outputs/hf_dataset_discovery.csv
+
+esai-collect sample-recall-audit \
+  --candidates outputs/benchmark_candidates.csv \
+  --size 200 \
+  --out outputs/low_tier_recall_audit.csv
+```
+
+`enrich-metadata` uses Semantic Scholar and OpenAlex to backfill abstracts, identifiers, citations,
+open-access links, and venue/source metadata. `discover-hf-datasets` creates an artifact-discovery
+queue from Hugging Face Hub dataset search. `sample-recall-audit` samples low-tier candidates so
+screening recall can be measured by review instead of assumption.
 
 ## Review and tracker export
 
@@ -85,6 +115,37 @@ esai-collect export \
 work can continue after the tracker owner assigns benchmark IDs. Incomplete approved rows are
 rejected rather than partially exported.
 
+## Integration package
+
+To clean the collection rows and package mapping-validation outputs for a shared-sheet update:
+
+```bash
+esai-collect prepare-sheet-package \
+  --review-queue outputs/latest/tracker_review_queue.csv \
+  --validation-issues ../mapping-validation/outputs/hardened/deterministic_issues.csv \
+  --id-repairs ../mapping-validation/outputs/hardened/duplicate_edge_id_repairs.csv \
+  --outdir outputs/sheet_package
+```
+
+The command writes clean import CSVs for candidate review rows, validation issue summaries,
+duplicate edge ID repairs, and optional human-approved mapping patches. It does not write to the
+live shared sheet; use the generated CSVs after confirming the exact sheet target and ranges.
+
+To produce the HuggingFace-ready dataset package:
+
+```bash
+esai-collect export-hf-dataset \
+  --papers outputs/latest/papers_raw.csv \
+  --candidates outputs/latest/benchmark_candidates.csv \
+  --review-queue outputs/latest/tracker_review_queue.csv \
+  --mapping-edges ../mapping-validation/outputs/hardened/all_edges.csv \
+  --source-registry ../mapping-validation/outputs/hardened/benchmark_sources.csv \
+  --outdir outputs/hf_dataset
+```
+
+See [INTEGRATION_WORKFLOW.md](INTEGRATION_WORKFLOW.md) and
+[HUGGINGFACE_DATASET_SCHEMA.md](HUGGINGFACE_DATASET_SCHEMA.md) for the weekly data workflow.
+
 ## Method
 
 Collection and screening are separate and repeatable:
@@ -97,14 +158,15 @@ Collection and screening are separate and repeatable:
 6. require human benchmark coding and risk triage;
 7. export tracker-shaped records and a separate mapping handoff.
 
-See [METHODOLOGY.md](METHODOLOGY.md) for the inclusion policy and extension procedure.
+See [METHODOLOGY.md](METHODOLOGY.md) for the inclusion policy and
+[SOURCE_ADAPTERS.md](SOURCE_ADAPTERS.md) for source-adapter notes.
 
 ## Development
 
 ```bash
 ruff format --check esai_collection tests
 ruff check esai_collection tests
-pytest
+pytest -p no:cacheprovider --basetemp test-tmp
 ```
 
 Generated data and downloaded workbooks are ignored by Git.

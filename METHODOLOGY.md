@@ -12,8 +12,8 @@ The cutoff is 1 November 2022. Whole venue editions are included as follows:
 | COLM | 2024 onward | OpenReview conference venue |
 
 This avoids treating the pre-cutoff ICLR and ICML 2022 proceedings as in scope. NeurIPS 2022 is
-included because the conference edition occurred after the cutoff. ACL collection is maintained
-separately and joins through the raw schema contract.
+included because the conference edition occurred after the cutoff. ACL Anthology collection is
+owned by Emily's workstream and should join through the raw schema contract.
 
 ## Source and date provenance
 
@@ -74,6 +74,21 @@ Exported benchmark rows retain the workbook's exact column order. A separate map
 preserves candidate ID, quick reference, title, priority status, harm IDs, triage rationale, and
 review attribution until the tracker owner assigns a benchmark ID.
 
+## Enrichment and artifact discovery
+
+Semantic Scholar and OpenAlex are used only as metadata enrichment sources. They can add abstracts,
+DOIs, citation counts, open-access links, concepts, and source names, but they do not prove that a
+paper was accepted by an in-scope venue. Enrichment output is keyed by `record_id` and stays in a
+sidecar file.
+
+Hugging Face Hub dataset search is used as an artifact-discovery queue. It can surface benchmark
+datasets that do not appear in the accepted-paper corpus, but every result needs human review
+before it becomes a tracker row.
+
+Low-tier recall audit samples are drawn from candidates that mention benchmark-like terms without
+an introduction claim. Reviewed audit decisions should be used to tune screening rules and report
+false-negative risk.
+
 ## Reproducibility
 
 Every command records the package version, UTC time, Git commit and dirty state, parameters, input
@@ -94,3 +109,8 @@ A new adapter must:
 6. document the first in-scope edition;
 7. pass records through the shared screening, deduplication, matching, risk-triage, and export
    workflow.
+
+For sources such as Semantic Scholar, OpenAlex, Hugging Face Hub, Papers with Code, arXiv, and
+GitHub, decide first whether the source is authoritative for accepted papers or useful only for
+metadata enrichment or artifact discovery. Non-authoritative sources should not be mixed into the
+raw accepted-paper layer.
