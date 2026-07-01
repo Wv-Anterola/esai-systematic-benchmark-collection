@@ -236,7 +236,7 @@ def _write_spec(outdir: Path, *, dataset_name: str) -> None:
         "discipline of EvalEval's *Every Eval Ever* schema:",
         "",
         "- **Stable identity.** Every record has a `uuid` computed as "
-        "`uuid5(namespace, \"{record_type}:{natural_key}\")` with a fixed "
+        '`uuid5(namespace, "{record_type}:{natural_key}")` with a fixed '
         f"namespace `{d1.NAMESPACE}`, so IDs are reproducible and "
         "conflict-free.",
         "- **Normalized entities.** `benchmark` and `harm` are first-class "
@@ -245,8 +245,7 @@ def _write_spec(outdir: Path, *, dataset_name: str) -> None:
         "- **Layered provenance.** Entities carry a nested `provenance` object "
         "(`source`, `source_id`, `retrieved_at`, `run_id`, `pipeline_version`, "
         "`git_commit`).",
-        "- **Closed vocabularies.** Grading and status fields use the enums "
-        "below.",
+        "- **Closed vocabularies.** Grading and status fields use the enums below.",
         "- **Checksummed manifest.** `dataset_manifest.json` records per-file "
         "`sha256`, row counts, primary keys, and declared cross-file "
         "references.",

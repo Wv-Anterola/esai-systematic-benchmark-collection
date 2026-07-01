@@ -17,6 +17,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9", "ruff>=0.12,<1"]
+# ACL Anthology auto-download/cache for `collect-acl` when ACL_ANTHOLOGY_DATA is
+# not set. Direct-from-XML parsing needs no runtime import; this only powers the
+# fallback that clones and caches the Anthology data/ checkout.
+acl = ["acl-anthology-py>=0.5,<1"]
 
 [project.scripts]
 esai-collect = "esai_collection.cli:main"

@@ -4,21 +4,30 @@ This workflow is for the weekly benchmark-side data engineering pass: clean the 
 sheet, fold validation outputs into the shared mapping, keep ACL and non-ACL collection in one
 pipeline, and refresh the dataset export.
 
-## 1. Merge ACL and non-ACL papers
+## 1. Collect ACL and non-ACL papers
 
-Non-ACL sources are collected here:
+ACL is a first-class source. `run` collects OpenReview, PMLR, and ACL Anthology together, then
+merges, screens, and builds the review queue in one pass:
 
 ```bash
 esai-collect run --workbook "path/to/workbook.xlsx" --outdir outputs/latest
 ```
 
-Emily's ACL workstream should export a raw CSV that follows [SCHEMA.md](SCHEMA.md). After that file
-exists, merge it with the non-ACL raw files:
+ACL needs an Anthology `data/` checkout. Provide it one of three ways:
+
+- install the optional dependency (`pip install -e ".[acl]"`) so the adapter downloads and caches
+  the Anthology on first use;
+- point `--acl-data-dir path/to/acl-anthology/data` (or set `ACL_ANTHOLOGY_DATA`) at an existing
+  checkout;
+- pass `--skip-acl` to run OpenReview and PMLR only.
+
+If a collaborator hands off an ACL raw CSV collected elsewhere, it must follow
+[SCHEMA.md](SCHEMA.md); fold it in with `merge` before screening:
 
 ```bash
 esai-collect merge \
   outputs/latest/papers_raw.csv \
-  path/to/emily_acl_raw.csv \
+  path/to/handoff_acl_raw.csv \
   --out outputs/combined/papers_raw.csv
 
 esai-collect screen \

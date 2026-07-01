@@ -33,9 +33,7 @@ SOURCE_SCHEMA_VERSION = "0.1.0"
 #              "https://huggingface.co/datasets/wvanterola/esai_benchmark_map")
 NAMESPACE = uuid.UUID("1e093b0b-ead6-526f-b109-fd3d9b9b5219")
 
-UUID5_PATTERN = (
-    "^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-)
+UUID5_PATTERN = "^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 
 
 def record_uuid(kind: str, key: str) -> str:
@@ -439,6 +437,7 @@ REFERENCES: list[dict[str, str]] = [
 
 # --- Value coercion ----------------------------------------------------------
 
+
 def _text(value: object) -> str:
     return str(value or "").strip()
 
@@ -597,9 +596,7 @@ def candidate_v1(
         tracker_match_method=_text(row.get("tracker_match_method")),
         verification_status=_or_none(row.get("verification_status")),
         candidate_harm_ids=harm_ids,
-        candidate_harm_uuids=[
-            harm_uuid_of[h] for h in harm_ids if h in harm_uuid_of
-        ],
+        candidate_harm_uuids=[harm_uuid_of[h] for h in harm_ids if h in harm_uuid_of],
         priority_risk=_text(row.get("priority_risk")),
         risk_relevance_status=_text(row.get("risk_relevance_status")),
         review_status=_text(row.get("review_status")),
@@ -804,4 +801,3 @@ def normalize_benchmarks(
                 if value:
                     cur[dst] = value
     return [benchmark_v1(agg[bid]) for bid in sorted(agg)]
-

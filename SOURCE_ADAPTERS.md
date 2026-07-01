@@ -37,6 +37,10 @@ The `run` command performs all three steps across every enabled source in one pa
 detection is left to the shared screening step, so the ACL adapter collects every in-scope accepted
 paper rather than pre-filtering — matching the OpenReview and PMLR adapters.
 
+The adapter reads a local Anthology `data/` checkout. Make one available with the optional
+dependency (`pip install -e ".[acl]"`, which auto-downloads and caches it), by setting
+`ACL_ANTHOLOGY_DATA`/`--data-dir` to an existing checkout, or skip ACL with `--skip-acl` on `run`.
+
 ## Candidate future sources
 
 These sources are useful outside the authoritative accepted-paper layer.

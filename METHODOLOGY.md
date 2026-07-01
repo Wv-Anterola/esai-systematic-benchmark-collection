@@ -10,10 +10,14 @@ The cutoff is 1 November 2022. Whole venue editions are included as follows:
 | ICLR | 2023 onward | OpenReview conference venue |
 | ICML | 2023 onward | PMLR ICML proceedings volumes |
 | COLM | 2024 onward | OpenReview conference venue |
+| *ACL families (ACL, EMNLP, NAACL, EACL, AACL, COLING, Findings, ...) | Nov 2022 onward | ACL Anthology XML, top-level (`is_toplevel`) venues |
 
 This avoids treating the pre-cutoff ICLR and ICML 2022 proceedings as in scope. NeurIPS 2022 is
-included because the conference edition occurred after the cutoff. ACL Anthology collection is
-owned by Emily's workstream and should join through the raw schema contract.
+included because the conference edition occurred after the cutoff. ACL Anthology collection is a
+first-class adapter (`esai_collection/acl_source.py`, `collect-acl`) that emits the shared raw
+schema and runs inside `esai-collect run` alongside OpenReview and PMLR; major venues are read from
+the Anthology's own `is_toplevel` flag, so new venues and editions are picked up with no code
+change.
 
 ## Source and date provenance
 
@@ -25,8 +29,10 @@ results.
 OpenReview does not provide a consistent paper-level publication date for every edition. Its
 `publication_date` is therefore a documented venue-month estimate and
 `publication_date_basis=venue-edition-estimate`. PMLR records use the proceedings publication
-date with `publication_date_basis=proceedings-publication-date`. Edition inclusion, not the
-estimated first day of a month, determines cutoff eligibility.
+date with `publication_date_basis=proceedings-publication-date`. ACL records use the Anthology
+volume month where available (`publication_date_basis=anthology-volume-month`) and fall back to the
+volume year (`anthology-volume-year`). Edition inclusion, not the estimated first day of a month,
+determines cutoff eligibility.
 
 ## Collection completeness
 

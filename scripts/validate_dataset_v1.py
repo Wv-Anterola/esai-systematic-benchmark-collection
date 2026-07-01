@@ -95,9 +95,7 @@ def validate(root: Path) -> Report:
             report.check(False, f"declared file missing: {rel}")
             continue
 
-        report.check(
-            _sha256(path) == meta["sha256"], f"{rel}: sha256 mismatch"
-        )
+        report.check(_sha256(path) == meta["sha256"], f"{rel}: sha256 mismatch")
         rows = _load_jsonl(path)
         loaded[record_type] = rows
         report.check(

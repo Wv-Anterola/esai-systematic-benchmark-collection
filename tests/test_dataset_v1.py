@@ -16,9 +16,7 @@ def test_record_uuid_is_deterministic_and_distinct() -> None:
     assert d1.record_uuid("benchmark", "B6.01.01") == d1.record_uuid(
         "benchmark", "B6.01.01"
     )
-    assert d1.record_uuid("benchmark", "B6.01.01") != d1.record_uuid(
-        "harm", "B6.01.01"
-    )
+    assert d1.record_uuid("benchmark", "B6.01.01") != d1.record_uuid("harm", "B6.01.01")
     # Fixed namespace: the value must not change silently.
     assert d1.record_uuid("harm", "7.03.01") == "ca23e1af-9613-5017-9eb4-ed08b9f60351"
 
