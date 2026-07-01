@@ -6,6 +6,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .acl_source import collect_acl
 from .enrichment import ENRICHMENT_FIELDS, enrich_records
 from .hf_dataset import SCHEMA_VERSION, export_hf_dataset
 from .hf_discovery import HF_DISCOVERY_FIELDS, discover_hf_datasets
@@ -126,6 +127,29 @@ def collect_icml_command(args: argparse.Namespace) -> int:
         },
     )
     print(f"ICML records: {len(records)}")
+    print(f"Run log: {args.log}")
+    print(f"Raw data: {args.out}")
+    return int(any(row.get("status") == "error" for row in logs))
+
+
+def collect_acl_command(args: argparse.Namespace) -> int:
+    records, logs = collect_acl(data_dir=args.data_dir, as_of_year=args.as_of_year)
+    write_csv(args.out, records, RAW_FIELDS)
+    write_csv(args.log, logs, LOG_FIELDS)
+    write_manifest(
+        _sidecar(args.out),
+        command="collect-acl",
+        outputs=[args.out, args.log],
+        parameters={
+            "as_of_year": args.as_of_year,
+            "data_dir": str(args.data_dir) if args.data_dir else None,
+        },
+        counts={
+            "records": len(records),
+            "source_errors": sum(row.get("status") == "error" for row in logs),
+        },
+    )
+    print(f"ACL records: {len(records)}")
     print(f"Run log: {args.log}")
     print(f"Raw data: {args.out}")
     return int(any(row.get("status") == "error" for row in logs))
@@ -410,6 +434,12 @@ def run_command(args: argparse.Namespace) -> int:
         source_rows, source_logs = collect_icml(as_of_year=args.as_of_year)
         raw.extend(source_rows)
         logs.extend(source_logs)
+    if not args.skip_acl:
+        source_rows, source_logs = collect_acl(
+            data_dir=args.acl_data_dir, as_of_year=args.as_of_year
+        )
+        raw.extend(source_rows)
+        logs.extend(source_logs)
 
     unique = {str(row["record_id"]): row for row in raw}
     merged = list(unique.values())
@@ -442,10 +472,14 @@ def run_command(args: argparse.Namespace) -> int:
         workbook=args.workbook.resolve() if args.workbook else None,
         parameters={
             "as_of_year": args.as_of_year,
-            "cutoff_policy": "ICLR 2023+, ICML 2023+, NeurIPS 2022+, COLM 2024+",
-            "acl_included": False,
+            "cutoff_policy": (
+                "ICLR 2023+, ICML 2023+, NeurIPS 2022+, COLM 2024+, "
+                "ACL major venues 2022-11+"
+            ),
+            "acl_included": not args.skip_acl,
             "openreview_enabled": not args.skip_openreview,
             "pmlr_icml_enabled": not args.skip_icml,
+            "acl_enabled": not args.skip_acl,
             "limit_per_venue": args.limit_per_venue,
             "include_low": args.include_low,
         },
@@ -482,6 +516,20 @@ def build_parser() -> argparse.ArgumentParser:
     icml.add_argument("--out", type=Path, default=Path("outputs/icml_raw.csv"))
     icml.add_argument("--log", type=Path, default=Path("outputs/icml_log.csv"))
     icml.set_defaults(handler=collect_icml_command)
+
+    acl = subparsers.add_parser(
+        "collect-acl", help="collect major ACL Anthology venues"
+    )
+    acl.add_argument("--as-of-year", type=_year, default=current_year)
+    acl.add_argument(
+        "--data-dir",
+        type=Path,
+        help="ACL Anthology data/ checkout (auto-detected via ACL_ANTHOLOGY_DATA "
+        "or the acl-anthology-py cache when omitted)",
+    )
+    acl.add_argument("--out", type=Path, default=Path("outputs/acl_raw.csv"))
+    acl.add_argument("--log", type=Path, default=Path("outputs/acl_log.csv"))
+    acl.set_defaults(handler=collect_acl_command)
 
     merge = subparsers.add_parser("merge", help="merge source-specific raw files")
     merge.add_argument("inputs", type=Path, nargs="+")
@@ -636,6 +684,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--include-low", action="store_true")
     run.add_argument("--skip-openreview", action="store_true")
     run.add_argument("--skip-icml", action="store_true")
+    run.add_argument("--skip-acl", action="store_true")
+    run.add_argument(
+        "--acl-data-dir",
+        type=Path,
+        help="ACL Anthology data/ checkout (auto-detected when omitted)",
+    )
     run.set_defaults(handler=run_command)
     return parser
 

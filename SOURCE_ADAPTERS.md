@@ -6,11 +6,11 @@
 |---|---|---|---|
 | OpenReview | implemented | ICLR, NeurIPS, COLM accepted papers | Venue decision records are authoritative enough for accepted-paper collection. |
 | PMLR | implemented | ICML proceedings | Official proceedings volumes give stable paper metadata and publication dates. |
-| ACL Anthology | external handoff | Emily's ACL-family collector | Should emit the shared raw schema and then use this repo's merge, screen, review, and export steps. |
+| ACL Anthology | implemented (`collect-acl`) | Major *ACL venue families | The Anthology XML/venue metadata is the authoritative record; `esai_collection/acl_source.py` emits the shared raw schema and flows through the same merge, screen, review, and export steps. |
 
 ## Adapter contract
 
-Every source adapter, including Emily's ACL work, should produce:
+Every source adapter produces:
 
 - `raw.csv` with exactly the columns in [SCHEMA.md](SCHEMA.md);
 - `log.csv` with query-level `ok`, `empty`, and `error` rows;
@@ -23,15 +23,19 @@ metadata, keep it in a sidecar file keyed by `record_id`.
 
 ## ACL and non-ACL consolidation
 
-ACL collection can remain in Emily's code while this repository owns the shared downstream path.
-The handoff point is the raw schema:
+ACL collection is implemented in `esai_collection/acl_source.py` and exposed as `collect-acl`. It
+parses the ACL Anthology XML directly (version-independent of `acl-anthology-py`) and reads the
+Anthology's own `is_toplevel` venue flag, so new major venues and new editions are picked up with no
+code change. It emits the shared raw schema, so consolidation is just the normal pipeline:
 
-1. Emily exports `acl_raw.csv`, `acl_log.csv`, and a manifest.
-2. This repo merges `acl_raw.csv` with OpenReview/PMLR raw records.
+1. `collect-acl` writes `acl_raw.csv`, `acl_log.csv`, and a manifest.
+2. `merge` combines `acl_raw.csv` with OpenReview/PMLR raw records.
 3. Screening, tracker matching, sheet cleanup, mapping handoff, and HuggingFace export run once on
    the combined file.
 
-That keeps the ACL implementation independent without creating a second benchmark-review format.
+The `run` command performs all three steps across every enabled source in one pass. Benchmark
+detection is left to the shared screening step, so the ACL adapter collects every in-scope accepted
+paper rather than pre-filtering — matching the OpenReview and PMLR adapters.
 
 ## Candidate future sources
 
@@ -55,7 +59,7 @@ Reference docs checked for the source-options plan:
 
 ## Priority additions
 
-1. Merge Emily's ACL output through the shared schema, then screen the combined corpus.
+1. Run `collect-acl` and merge it with OpenReview/PMLR, then screen the combined corpus (done; see `collect-acl`).
 2. Use `enrich-metadata` on reviewed candidates to fill source abstracts and identifiers.
 3. Use `discover-hf-datasets` to build a separate queue for benchmark artifacts missed by papers.
 4. Use `sample-recall-audit` on low-tier candidates before changing screening terms.
