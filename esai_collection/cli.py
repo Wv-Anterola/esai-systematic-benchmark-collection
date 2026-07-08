@@ -8,6 +8,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .acl_source import collect_acl
+from .citations import (
+    CITATION_FIELDS,
+    HISTOGRAM_FIELDS,
+    citation_histogram,
+    filter_by_citations,
+    join_citations,
+    suggest_cutoffs,
+)
 from .enrichment import ENRICHMENT_FIELDS, enrich_records
 from .hf_dataset import SCHEMA_VERSION, export_hf_dataset
 from .hf_discovery import HF_DISCOVERY_FIELDS, discover_hf_datasets
@@ -263,6 +271,74 @@ def enrich_metadata_command(args: argparse.Namespace) -> int:
         },
     )
     print(f"Enriched rows: {len(enriched)}")
+    print(f"Output: {args.out}")
+    return 0
+
+
+def citation_histogram_command(args: argparse.Namespace) -> int:
+    joined = join_citations(
+        read_csv(args.candidates),
+        read_csv(args.enrichment),
+        as_of_year=args.as_of_year,
+    )
+    histogram = citation_histogram(joined)
+    cutoffs = suggest_cutoffs(joined)
+    write_csv(args.out, histogram, HISTOGRAM_FIELDS)
+    resolved = sum(1 for row in joined if row.get("citation_count"))
+    write_manifest(
+        _sidecar(args.out),
+        command="citation-histogram",
+        inputs=[args.candidates, args.enrichment],
+        outputs=[args.out],
+        parameters={"as_of_year": args.as_of_year},
+        counts={"candidates": len(joined), "with_citations": resolved},
+    )
+    print(f"Candidates: {len(joined)} ({resolved} with citation counts)")
+    for row in histogram:
+        print(
+            f"  {row['citation_bucket']:>7}: {row['papers']:>6} papers "
+            f"({row['share_pct']:>5}%)  cumulative {row['cumulative_pct']:>5}%"
+        )
+    print("Suggested min-citation cutoffs:")
+    for row in cutoffs:
+        print(
+            f"  >= {row['min_citations']:>2}: keep {row['kept']:>6} "
+            f"({row['kept_pct']:>5}%), drop {row['dropped']}"
+        )
+    print(f"Histogram: {args.out}")
+    return 0
+
+
+def filter_citations_command(args: argparse.Namespace) -> int:
+    joined = join_citations(
+        read_csv(args.candidates),
+        read_csv(args.enrichment),
+        as_of_year=args.as_of_year,
+    )
+    kept, status_counts = filter_by_citations(
+        joined,
+        min_citations=args.min_citations,
+        max_age_years=args.max_age_years,
+        drop_missing=args.drop_missing,
+    )
+    write_csv(args.out, kept, CITATION_FIELDS)
+    write_manifest(
+        _sidecar(args.out),
+        command="filter-citations",
+        inputs=[args.candidates, args.enrichment],
+        outputs=[args.out],
+        parameters={
+            "as_of_year": args.as_of_year,
+            "min_citations": args.min_citations,
+            "max_age_years": args.max_age_years,
+            "drop_missing": args.drop_missing,
+        },
+        counts={"input": len(joined), "kept": len(kept), **status_counts},
+    )
+    print(f"Input candidates: {len(joined)}")
+    for status, count in sorted(status_counts.items()):
+        print(f"  {status}: {count}")
+    print(f"Kept (ranked by citations): {len(kept)}")
     print(f"Output: {args.out}")
     return 0
 
@@ -596,6 +672,49 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", type=Path, default=Path("outputs/metadata_enrichment.csv")
     )
     enrich.set_defaults(handler=enrich_metadata_command)
+
+    histogram = subparsers.add_parser(
+        "citation-histogram",
+        help="bucket screened candidates by citation count (drops nothing)",
+    )
+    histogram.add_argument(
+        "--candidates", type=Path, default=Path("outputs/benchmark_candidates.csv")
+    )
+    histogram.add_argument(
+        "--enrichment", type=Path, default=Path("outputs/metadata_enrichment.csv")
+    )
+    histogram.add_argument("--as-of-year", type=_year, default=current_year)
+    histogram.add_argument(
+        "--out", type=Path, default=Path("outputs/citation_histogram.csv")
+    )
+    histogram.set_defaults(handler=citation_histogram_command)
+
+    filter_citations = subparsers.add_parser(
+        "filter-citations",
+        help="filter candidates by citations (Zhijing's rule: --min-citations 10 "
+        "--max-age-years 5)",
+    )
+    filter_citations.add_argument(
+        "--candidates", type=Path, default=Path("outputs/benchmark_candidates.csv")
+    )
+    filter_citations.add_argument(
+        "--enrichment", type=Path, default=Path("outputs/metadata_enrichment.csv")
+    )
+    filter_citations.add_argument("--as-of-year", type=_year, default=current_year)
+    filter_citations.add_argument(
+        "--min-citations",
+        type=int,
+        help="drop papers older than --max-age-years with fewer citations; "
+        "omit to annotate only (no drops)",
+    )
+    filter_citations.add_argument("--max-age-years", type=int, default=5)
+    filter_citations.add_argument("--drop-missing", action="store_true")
+    filter_citations.add_argument(
+        "--out",
+        type=Path,
+        default=Path("outputs/benchmark_candidates_filtered.csv"),
+    )
+    filter_citations.set_defaults(handler=filter_citations_command)
 
     hf = subparsers.add_parser(
         "discover-hf-datasets",
