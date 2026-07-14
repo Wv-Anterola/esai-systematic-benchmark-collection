@@ -94,13 +94,28 @@ def check(ax, x, y, text, *, ok=True, color=None):
     ax.text(x + 0.28, y, text, ha="left", va="center", fontsize=9.3, color=INK)
 
 
-def hexmarker(ax, x, y, lines):
-    ax.add_patch(RegularPolygon((x, y), numVertices=6, radius=0.22,
-                 orientation=0, facecolor="#fdf6e3", edgecolor=GOLD,
-                 linewidth=1.8, zorder=3))
+def tone_for(count):
+    if count == 0:
+        return RED, "#fbeceb"
+    if count < 50:
+        return AMBER, "#fbf3e2"
+    return GREEN, "#eaf6ee"
+
+
+def hexcell(ax, x, ytop, lines, count):
+    """A named-systemic-risk hexagon with its label + benchmark count below,
+    tinted by coverage (green = well covered, amber = thin, red = gap)."""
+    tone, fill = tone_for(count)
+    ax.add_patch(RegularPolygon((x, ytop), numVertices=6, radius=0.24,
+                 orientation=0, facecolor=fill, edgecolor=tone,
+                 linewidth=1.9, zorder=3))
     for i, ln in enumerate(lines):
-        ax.text(x + 0.4, y + 0.16 - i * 0.32, ln, ha="left", va="center",
-                fontsize=10.5, color=INK, fontweight="bold")
+        ax.text(x, ytop - 0.52 - i * 0.30, ln, ha="center", va="center",
+                fontsize=10, color=INK, fontweight="bold")
+    yc = ytop - 0.52 - len(lines) * 0.30
+    label = f"{count} benchmarks" if count else "gap — none yet"
+    ax.text(x, yc, label, ha="center", va="center", fontsize=8.5, color=tone,
+            fontweight="bold")
 
 
 def ai_act_icon(ax, cx, cy):
@@ -201,16 +216,15 @@ def main() -> int:
     ax.text(6.45, 6.75, "Technical Interpretation", ha="left", va="center",
             fontsize=9.5, color=BLUE, fontstyle="italic", fontweight="bold")
 
-    # ---- Band 2: Technical Requirements (named systemic risks) ----
+    # ---- Band 2: Technical Requirements = the 4 CoP App. 1.4 named risks ----
     ax.text(2.9, 5.7, "Technical", ha="left", va="center", fontsize=11.5,
             color=INK, fontweight="bold")
     ax.text(2.9, 5.37, "Requirements", ha="left", va="center", fontsize=11.5,
             color=INK, fontweight="bold")
-    hexmarker(ax, 5.35, 5.55, ["Loss of control"])
-    ax.text(5.75, 5.25, "(7.1 · 7.3 · 7.6)", ha="left", va="center",
-            fontsize=8.5, color=MUTED)
-    hexmarker(ax, 8.45, 5.55, ["Harmful", "manipulation"])
-    ax.text(11.6, 5.4, "…", ha="center", va="center", fontsize=16, color=MUTED)
+    hexcell(ax, 5.45, 5.95, ["Loss of", "control"], n_loc)
+    hexcell(ax, 7.75, 5.95, ["Harmful", "manipulation"], n_hm)
+    hexcell(ax, 10.05, 5.95, ["Cyber", "offence"], n_cyber)
+    hexcell(ax, 12.15, 5.95, ["CBRN"], counts.get("CBRN", 0))
 
     ax.add_patch(FancyArrowPatch((6.2, 4.75), (6.2, 3.75), arrowstyle="-|>",
                  mutation_scale=18, linewidth=2.0, color=BLUE, zorder=4))
