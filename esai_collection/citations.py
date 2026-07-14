@@ -72,8 +72,10 @@ def coalesce_citations(enrichment_row: dict[str, str] | None) -> tuple[int | Non
     provided = [
         (count, source)
         for count, source in (
-            (_parse_int(enrichment_row.get("semantic_scholar_citation_count")),
-             "semantic-scholar"),
+            (
+                _parse_int(enrichment_row.get("semantic_scholar_citation_count")),
+                "semantic-scholar",
+            ),
             (_parse_int(enrichment_row.get("openalex_cited_by_count")), "openalex"),
             (_parse_int(enrichment_row.get("crossref_cited_by_count")), "crossref"),
         )

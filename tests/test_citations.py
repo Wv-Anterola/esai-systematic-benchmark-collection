@@ -17,9 +17,7 @@ def test_coalesce_prefers_max_and_records_source() -> None:
 
 def test_coalesce_uses_crossref_when_present() -> None:
     # Crossref-only row (OpenAlex/S2 blank because they were rate-limited).
-    assert coalesce_citations(
-        {"crossref_cited_by_count": "7"}
-    ) == (7, "crossref")
+    assert coalesce_citations({"crossref_cited_by_count": "7"}) == (7, "crossref")
     # Max across all three providers wins.
     assert coalesce_citations(
         {
