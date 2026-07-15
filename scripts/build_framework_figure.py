@@ -260,28 +260,32 @@ def main() -> int:
             ha="left", va="center", fontsize=9, color=BLUE,
             fontstyle="italic", fontweight="bold")
 
-    # ---- Right: Coverage report (sample) ----
+    # ---- Right: Model report (real EvalEval / EEE scores) ----
+    # Claude 3.7 Sonnet, retrieved 2026-07-14 from evaleval/EEE_datastore.
+    # See outputs/framework/eval_numbers_eee.json for provenance.
     ax.add_patch(FancyArrowPatch((13.0, 5.1), (13.7, 5.1), arrowstyle="-|>",
                  mutation_scale=18, linewidth=2.0, color=BLUE, zorder=4))
     rbox(ax, 13.8, 1.2, 4.5, 7.4, fill="white", edge=BLUE, lw=1.8, z=3, r=0.04)
-    report_row(ax, 14.05, 7.85, "310", "Coverage report", None, None)
-    ax.text(15.05, 7.5, "417 collected · 1,387 edges", ha="left", va="center",
-            fontsize=8.5, color=MUTED)
-    ax.text(14.42, 6.9, "⋮", ha="center", va="center", family=GLYPH,
-            fontsize=13, color=FAINT)
-    report_row(ax, 14.05, 6.2, str(n_loc), "Loss of control",
-               "well covered", (loc_names[0], True), tone=GREEN)
-    ax.text(14.42, 5.25, "⋮", ha="center", va="center", family=GLYPH,
-            fontsize=13, color=FAINT)
-    report_row(ax, 14.05, 4.55, str(n_hm), "Harmful manipulation",
-               "thin coverage", (hm_names[0], True), tone=AMBER)
-    ax.text(14.42, 3.6, "⋮", ha="center", va="center", family=GLYPH,
-            fontsize=13, color=FAINT)
-    report_row(ax, 14.05, 2.9, str(n_cyber), "Cyber offence / CBRN",
-               "gap — none yet", ("no benchmarks", False), tone=RED)
-
-    ax.text(13.85, 0.75, "illustrative · model scores are downstream (Tae)",
-            ha="left", va="center", fontsize=8, color=FAINT, fontstyle="italic")
+    ax.text(14.05, 8.18, "Model report", ha="left", va="center", fontsize=12,
+            color=INK, fontweight="bold")
+    ax.text(14.05, 7.82, "Claude 3.7 Sonnet", ha="left", va="center",
+            fontsize=10.5, color=BLUE_DK, fontweight="bold")
+    ax.text(14.05, 7.49, "real scores · EvalEval (EEE)", ha="left",
+            va="center", fontsize=8.5, color=MUTED)
+    report_row(ax, 14.05, 6.5, "0.81", "Loss of control",
+               "MMLU-Pro · accuracy", None, tone=BLUE)
+    report_row(ax, 14.05, 5.15, "0.95", "Harmful manipulation",
+               "HELM Safety · higher = safer", None, tone=GREEN)
+    report_row(ax, 14.05, 3.8, "0.23", "Cyber offence",
+               "Cybench · CTF accuracy", None, tone=BLUE)
+    report_row(ax, 14.05, 2.45, "N/A", "CBRN",
+               "no public eval", None, tone=RED)
+    ax.text(13.95, 1.78, "scores: EvalEval EEE datastore · retrieved 2026-07-14",
+            ha="left", va="center", fontsize=7.3, color=FAINT,
+            fontstyle="italic")
+    ax.text(13.95, 1.52, "raw benchmark metrics; capability vs safety differ",
+            ha="left", va="center", fontsize=7.3, color=FAINT,
+            fontstyle="italic")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=200, bbox_inches="tight", facecolor="white")
