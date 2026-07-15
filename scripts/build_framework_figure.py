@@ -113,7 +113,7 @@ def hexcell(ax, x, ytop, lines, count):
         ax.text(x, ytop - 0.52 - i * 0.30, ln, ha="center", va="center",
                 fontsize=10, color=INK, fontweight="bold")
     yc = ytop - 0.52 - len(lines) * 0.30
-    label = f"{count} benchmarks" if count else "gap — none yet"
+    label = f"{count} benchmarks" if count else "no benchmarks yet"
     ax.text(x, yc, label, ha="center", va="center", fontsize=8.5, color=tone,
             fontweight="bold")
 
@@ -167,8 +167,8 @@ def main() -> int:
 
     ax.text(0.3, 10.6, "The ESAI benchmark → harm → law map",
             ha="left", va="center", fontsize=17, color=INK, fontweight="bold")
-    ax.text(0.3, 10.15, "our EU AI Act mapping in the COMPL-AI Figure 1 layout "
-            "· my column: benchmark collection",
+    ax.text(0.3, 10.15, "EU AI Act provisions mapped to MIT risk categories and "
+            "collected benchmark evidence, in the COMPL-AI Figure 1 layout",
             ha="left", va="center", fontsize=11, color=MUTED)
 
     ai_act_icon(ax, 1.05, 8.0)
@@ -236,8 +236,8 @@ def main() -> int:
     rbox(ax, 2.6, 0.75, 10.2, 2.85, fill=BAND, edge="none", z=1, r=0.04)
     ax.text(2.9, 2.4, "Benchmarking", ha="left", va="center", fontsize=11.5,
             color=INK, fontweight="bold")
-    ax.text(2.9, 2.07, "Suite (ours)", ha="left", va="center", fontsize=11.5,
-            color=INK, fontweight="bold")
+    ax.text(2.9, 2.07, "Suite (this work)", ha="left", va="center",
+            fontsize=11.5, color=INK, fontweight="bold")
 
     rbox(ax, 5.05, 1.3, 3.05, 2.15, fill="white", edge="#b9c4d8", lw=1.2,
          ls=(0, (4, 3)), z=3)

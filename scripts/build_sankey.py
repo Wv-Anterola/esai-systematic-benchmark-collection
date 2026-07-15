@@ -57,13 +57,19 @@ NAMED_LABELS = {
     "cyber-offence": "Cyber offence",
     "harmful-manipulation": "Harmful manipulation",
 }
-UNMAPPED = "Not a named systemic risk"
+UNMAPPED = "Not a named risk"
 
 
 def short_subdomain(raw: str) -> str:
-    """'6.6 > Environmental harm' -> '6.6 Environmental harm' (trimmed)."""
+    """'6.6 > Environmental harm' -> '6.6 Environmental harm', trimmed at a word
+    boundary so the middle labels never reach the named-risk column labels."""
     txt = raw.replace(" > ", " ")
-    return txt if len(txt) <= 46 else txt[:44] + "…"
+    if len(txt) <= 30:
+        return txt
+    cut = txt[:29]
+    if " " in cut:
+        cut = cut[: cut.rfind(" ")]
+    return cut + "…"
 
 
 def domain_key(subdomain_raw: str) -> str:
@@ -139,12 +145,20 @@ def main() -> int:
         link_color.append(hex_to_rgba(base, 0.30))
 
     total = sum(dom_sub.values())
+    # Plotly draws a node's label to the LEFT when the node sits in the right
+    # half (x > 0.5). Pin the three columns far enough apart that the
+    # subdomain labels (drawn rightward) and the named-risk labels (drawn
+    # leftward) never share a horizontal band.
+    order = sorted(index.items(), key=lambda kv: kv[1])
+    col_x = {"D": 0.02, "S": 0.32, "N": 0.99}
+    node_x = [col_x[nid.split(":", 1)[0]] for nid, _ in order]
     fig = go.Figure(
         go.Sankey(
             arrangement="snap",
             node=dict(
                 label=labels,
                 color=colors,
+                x=node_x,
                 pad=16,
                 thickness=16,
                 line=dict(color="rgba(0,0,0,0.15)", width=0.5),
@@ -152,23 +166,56 @@ def main() -> int:
             link=dict(source=src, target=tgt, value=val, color=link_color),
         )
     )
+    # Colour legend, built from the domains actually present.
+    legend_names = {
+        "1": "1 Discrimination",
+        "2": "2 Privacy and security",
+        "3": "3 Misinformation",
+        "4": "4 Malicious use",
+        "5": "5 Human-computer",
+        "6": "6 Socioeconomic",
+        "7": "7 System safety",
+    }
+    present_domains = sorted({d for d, _ in dom_sub})
+    swatches = "   ".join(
+        f"<span style='color:{DOMAIN_COLOR[d]}'><b>{legend_names[d]}</b></span>"
+        for d in present_domains
+    )
+    legend = (
+        f"Colour = MIT risk domain:   {swatches}"
+        "<br>Right column:   "
+        f"<span style='color:{NAMED_COLOR}'><b>named systemic risk "
+        "(CoP App. 1.4)</b></span>   "
+        f"<span style='color:{UNMAPPED_COLOR}'><b>not a named systemic "
+        "risk</b></span>"
+    )
+
     fig.update_layout(
         title=dict(
             text=(
-                "Benchmark coverage of EU-relevant AI risks<br>"
+                "Coverage of EU-relevant AI risk categories by collected "
+                "benchmarks<br>"
                 f"<span style='font-size:13px;color:#667085'>"
-                f"{total:,} benchmark–risk edges · risk domain → "
-                f"subdomain → named systemic risk (CoP App. 1.4)</span>"
+                "Flow width is proportional to the number of benchmark-to-harm "
+                f"mappings (n = {total:,})."
+                "</span>"
             ),
             x=0.01,
             font=dict(size=20),
         ),
+        annotations=[
+            dict(
+                text=legend, xref="paper", yref="paper", x=0.0, y=-0.07,
+                showarrow=False, align="left", xanchor="left", yanchor="top",
+                font=dict(size=11, color="#4a5261"),
+            )
+        ],
         font=dict(family="Inter, Segoe UI, Helvetica, Arial", size=12,
                   color="#1d2433"),
         paper_bgcolor="white",
-        margin=dict(l=10, r=10, t=70, b=20),
-        height=760,
-        width=1200,
+        margin=dict(l=10, r=120, t=78, b=78),
+        height=800,
+        width=1500,
     )
 
     OUTDIR.mkdir(parents=True, exist_ok=True)
